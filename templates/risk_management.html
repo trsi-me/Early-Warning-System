@@ -1,0 +1,233 @@
+{% extends "layout.html" %}
+
+{% block title %}إدارة المخاطر - نظام الإنذار المبكر{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>إدارة المخاطر</h1>
+    
+    <div class="filter-bar">
+        <label>تصفية حسب الشركة:</label>
+        <select id="company-filter">
+            <option value="">الكل</option>
+        </select>
+        <label>تصفية حسب المستوى:</label>
+        <select id="risk-level-filter">
+            <option value="">الكل</option>
+            <option value="critical">حرج</option>
+            <option value="high">عالي</option>
+            <option value="medium">متوسط</option>
+            <option value="low">منخفض</option>
+        </select>
+    </div>
+    
+    <div class="risk-stats">
+        <div class="stat-card">
+            <h3>إجمالي المخاطر</h3>
+            <div class="stat-value" id="total-risks">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>مخاطر حرجة</h3>
+            <div class="stat-value critical" id="critical-risks">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>مخاطر عالية</h3>
+            <div class="stat-value high" id="high-risks">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>مخاطر متوسطة</h3>
+            <div class="stat-value medium" id="medium-risks">0</div>
+        </div>
+    </div>
+    
+    <div class="risks-table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>اسم المخاطرة</th>
+                    <th>الشركة</th>
+                    <th>الفئة</th>
+                    <th>المستوى</th>
+                    <th>الاحتمالية</th>
+                    <th>التأثير</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="risks-table">
+                <tr><td colspan="8">جاري التحميل...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="dashboard-section">
+        <h2>توزيع المخاطر</h2>
+        <canvas id="risks-chart"></canvas>
+    </div>
+</div>
+
+<script>
+let risksChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadCompanies();
+    loadRisks();
+    
+    document.getElementById('company-filter').addEventListener('change', loadRisks);
+    document.getElementById('risk-level-filter').addEventListener('change', loadRisks);
+});
+
+function loadCompanies() {
+    fetch('/api/companies')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('company-filter');
+            data.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = company.name;
+                select.appendChild(option);
+            });
+        });
+}
+
+function loadRisks() {
+    const companyId = document.getElementById('company-filter').value;
+    const riskLevel = document.getElementById('risk-level-filter').value;
+    
+    let url = '/api/risks';
+    if (companyId) {
+        url += `?company_id=${companyId}`;
+    }
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            let filteredData = data;
+            if (riskLevel) {
+                filteredData = data.filter(r => r.risk_level === riskLevel);
+            }
+            
+            updateStats(filteredData);
+            updateTable(filteredData);
+            updateChart(filteredData);
+        })
+        .catch(error => {
+            console.error('خطأ:', error);
+            document.getElementById('risks-table').innerHTML = '<tr><td colspan="8">حدث خطأ في تحميل البيانات</td></tr>';
+        });
+}
+
+function updateStats(risks) {
+    document.getElementById('total-risks').textContent = risks.length;
+    document.getElementById('critical-risks').textContent = risks.filter(r => r.risk_level === 'critical').length;
+    document.getElementById('high-risks').textContent = risks.filter(r => r.risk_level === 'high').length;
+    document.getElementById('medium-risks').textContent = risks.filter(r => r.risk_level === 'medium').length;
+}
+
+function updateTable(risks) {
+    const tbody = document.getElementById('risks-table');
+    if (risks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8">لا توجد مخاطر</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = risks.map(risk => {
+        const levelClass = `risk-level-${risk.risk_level}`;
+        const categoryText = {
+            'financial': 'مالية',
+            'operational': 'تشغيلية',
+            'strategic': 'استراتيجية',
+            'compliance': 'امتثال',
+            'reputational': 'سمعة'
+        }[risk.risk_category] || risk.risk_category;
+        
+        const levelText = {
+            'critical': 'حرج',
+            'high': 'عالي',
+            'medium': 'متوسط',
+            'low': 'منخفض'
+        }[risk.risk_level] || risk.risk_level;
+        
+        const statusText = {
+            'active': 'نشط',
+            'mitigated': 'مخفف',
+            'resolved': 'محلول'
+        }[risk.status] || risk.status;
+        
+        let actions = '';
+        if (risk.status === 'active') {
+            actions = `<button class="btn btn-sm btn-primary" onclick="updateRiskStatus(${risk.id}, 'mitigated')">تخفيف</button>`;
+        } else if (risk.status === 'mitigated') {
+            actions = `<button class="btn btn-sm btn-success" onclick="updateRiskStatus(${risk.id}, 'resolved')">حل</button>`;
+        }
+        
+        return `
+            <tr>
+                <td>${risk.risk_name}</td>
+                <td>${risk.company_name || '-'}</td>
+                <td>${categoryText}</td>
+                <td><span class="${levelClass}">${levelText}</span></td>
+                <td>${(risk.probability * 100).toFixed(0)}%</td>
+                <td>${(risk.impact * 100).toFixed(0)}%</td>
+                <td>${statusText}</td>
+                <td>${actions}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateChart(risks) {
+    const ctx = document.getElementById('risks-chart');
+    if (risksChart) {
+        risksChart.destroy();
+    }
+    
+    const levels = ['critical', 'high', 'medium', 'low'];
+    const counts = levels.map(level => risks.filter(r => r.risk_level === level).length);
+    
+    risksChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['حرج', 'عالي', 'متوسط', 'منخفض'],
+            datasets: [{
+                label: 'عدد المخاطر',
+                data: counts,
+                backgroundColor: ['#dc2626', '#ef4444', '#f59e0b', '#10b981']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    });
+}
+
+function updateRiskStatus(riskId, newStatus) {
+    fetch(`/api/risks/${riskId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadRisks();
+        } else {
+            alert('حدث خطأ أثناء تحديث حالة المخاطرة');
+        }
+    })
+    .catch(error => {
+        console.error('خطأ:', error);
+        alert('حدث خطأ في الاتصال بالخادم');
+    });
+}
+</script>
+{% endblock %}
+

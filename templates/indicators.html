@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+
+{% block title %}المؤشرات - نظام الإنذار المبكر{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>المؤشرات</h1>
+    
+    <div class="actions-bar">
+        <a href="{{ url_for('new_indicator') }}" class="btn btn-primary">إضافة مؤشر جديد</a>
+    </div>
+    
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>العنوان</th>
+                    <th>الوصف</th>
+                    <th>المصدر</th>
+                    <th>النوع</th>
+                    <th>القيمة</th>
+                    <th>التاريخ</th>
+                    <th>المنشئ</th>
+                    <th>تاريخ الإنشاء</th>
+                </tr>
+            </thead>
+            <tbody id="indicators-table">
+                <tr><td colspan="8">جاري التحميل...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadIndicators();
+});
+
+function loadIndicators() {
+    fetch('/api/indicators')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('indicators-table');
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8">لا توجد مؤشرات</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.map(ind => {
+                const value = ind.indicator_type === 'numeric' ? ind.numeric_value : ind.text_value;
+                return `
+                    <tr>
+                        <td>${ind.title}</td>
+                        <td>${ind.description || '-'}</td>
+                        <td>${ind.source}</td>
+                        <td>${ind.indicator_type === 'numeric' ? 'رقمي' : 'نصي'}</td>
+                        <td>${value || '-'}</td>
+                        <td>${ind.date}</td>
+                        <td>${ind.creator_name || '-'}</td>
+                        <td>${new Date(ind.created_at).toLocaleString('ar-SA')}</td>
+                    </tr>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('خطأ في تحميل المؤشرات:', error);
+            document.getElementById('indicators-table').innerHTML = '<tr><td colspan="8">حدث خطأ في تحميل البيانات</td></tr>';
+        });
+}
+</script>
+{% endblock %}
+

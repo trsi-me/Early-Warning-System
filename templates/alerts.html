@@ -1,0 +1,114 @@
+{% extends "layout.html" %}
+
+{% block title %}التنبيهات - نظام الإنذار المبكر{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>التنبيهات</h1>
+    
+    <div class="filter-bar">
+        <label>تصفية حسب الحالة:</label>
+        <select id="status-filter">
+            <option value="all">الكل</option>
+            <option value="new">جديد</option>
+            <option value="acknowledged">معترف به</option>
+            <option value="resolved">محلول</option>
+        </select>
+    </div>
+    
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>المستوى</th>
+                    <th>المؤشر</th>
+                    <th>الرسالة</th>
+                    <th>الحالة</th>
+                    <th>تاريخ الإنشاء</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="alerts-table">
+                <tr><td colspan="6">جاري التحميل...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadAlerts('all');
+    
+    document.getElementById('status-filter').addEventListener('change', function() {
+        loadAlerts(this.value);
+    });
+});
+
+function loadAlerts(status) {
+    const url = status === 'all' ? '/api/alerts' : `/api/alerts?status=${status}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('alerts-table');
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">لا توجد تنبيهات</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.map(alert => {
+                const levelClass = `alert-level-${alert.level}`;
+                const statusClass = `alert-status-${alert.status}`;
+                const levelText = alert.level === 'high' ? 'عالي' : alert.level === 'medium' ? 'متوسط' : 'منخفض';
+                const statusText = alert.status === 'new' ? 'جديد' : alert.status === 'acknowledged' ? 'معترف به' : 'محلول';
+                
+                let actions = '';
+                if (alert.status === 'new') {
+                    actions = `<button class="btn btn-sm btn-primary" onclick="updateAlertStatus(${alert.id}, 'acknowledged')">اعتراف</button>`;
+                } else if (alert.status === 'acknowledged') {
+                    actions = `<button class="btn btn-sm btn-success" onclick="updateAlertStatus(${alert.id}, 'resolved')">حل</button>`;
+                }
+                
+                return `
+                    <tr>
+                        <td><span class="${levelClass}">${levelText}</span></td>
+                        <td>${alert.indicator_title || '-'}</td>
+                        <td>${alert.message}</td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
+                        <td>${new Date(alert.created_at).toLocaleString('ar-SA')}</td>
+                        <td>${actions}</td>
+                    </tr>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('خطأ في تحميل التنبيهات:', error);
+            document.getElementById('alerts-table').innerHTML = '<tr><td colspan="6">حدث خطأ في تحميل البيانات</td></tr>';
+        });
+}
+
+function updateAlertStatus(alertId, newStatus) {
+    fetch(`/api/alerts/${alertId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const statusFilter = document.getElementById('status-filter').value;
+            loadAlerts(statusFilter);
+        } else {
+            alert('حدث خطأ أثناء تحديث حالة التنبيه');
+        }
+    })
+    .catch(error => {
+        console.error('خطأ:', error);
+        alert('حدث خطأ في الاتصال بالخادم');
+    });
+}
+</script>
+{% endblock %}
+

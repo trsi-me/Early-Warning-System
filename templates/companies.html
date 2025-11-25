@@ -1,0 +1,126 @@
+{% extends "layout.html" %}
+
+{% block title %}الشركات - نظام الإنذار المبكر{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>إدارة الشركات</h1>
+    
+    <div class="companies-grid" id="companies-grid">
+        <div class="loading">جاري التحميل...</div>
+    </div>
+</div>
+
+<div id="company-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <div id="company-details"></div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadCompanies();
+    
+    document.querySelector('.close-modal')?.addEventListener('click', function() {
+        document.getElementById('company-modal').style.display = 'none';
+    });
+});
+
+function loadCompanies() {
+    fetch('/api/companies')
+        .then(response => response.json())
+        .then(data => {
+            const grid = document.getElementById('companies-grid');
+            if (data.length === 0) {
+                grid.innerHTML = '<div class="no-data">لا توجد شركات</div>';
+                return;
+            }
+            
+            grid.innerHTML = data.map(company => {
+                const riskClass = `risk-${company.risk_level}`;
+                return `
+                    <div class="company-card" onclick="showCompanyDetails(${company.id})">
+                        <h3>${company.name}</h3>
+                        <p class="company-sector">${company.sector} - ${company.industry || ''}</p>
+                        <div class="company-risk ${riskClass}">
+                            مستوى المخاطرة: ${company.risk_level === 'high' ? 'عالي' : company.risk_level === 'medium' ? 'متوسط' : 'منخفض'}
+                        </div>
+                        <p class="company-description">${company.description || ''}</p>
+                        <div class="company-status status-${company.status}">${company.status === 'active' ? 'نشط' : company.status === 'monitoring' ? 'قيد المراقبة' : 'غير نشط'}</div>
+                    </div>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('خطأ:', error);
+            document.getElementById('companies-grid').innerHTML = '<div class="error">حدث خطأ في تحميل البيانات</div>';
+        });
+}
+
+function showCompanyDetails(companyId) {
+    fetch(`/api/companies/${companyId}`)
+        .then(response => response.json())
+        .then(data => {
+            const modal = document.getElementById('company-modal');
+            const details = document.getElementById('company-details');
+            
+            details.innerHTML = `
+                <h2>${data.name}</h2>
+                <div class="company-info">
+                    <p><strong>القطاع:</strong> ${data.sector}</p>
+                    <p><strong>الصناعة:</strong> ${data.industry || '-'}</p>
+                    <p><strong>مستوى المخاطرة:</strong> <span class="risk-${data.risk_level}">${data.risk_level === 'high' ? 'عالي' : data.risk_level === 'medium' ? 'متوسط' : 'منخفض'}</span></p>
+                    <p><strong>الحالة:</strong> ${data.status === 'active' ? 'نشط' : data.status === 'monitoring' ? 'قيد المراقبة' : 'غير نشط'}</p>
+                    <p><strong>الوصف:</strong> ${data.description || '-'}</p>
+                </div>
+                
+                <h3>الاستراتيجيات</h3>
+                <div class="strategies-list">
+                    ${data.strategies && data.strategies.length > 0 ? 
+                        data.strategies.map(s => `
+                            <div class="strategy-item">
+                                <h4>${s.name}</h4>
+                                <p>${s.description}</p>
+                                <span class="strategy-type">${s.strategy_type === 'financial' ? 'مالية' : s.strategy_type === 'operational' ? 'تشغيلية' : s.strategy_type === 'market' ? 'سوقية' : 'امتثال'}</span>
+                            </div>
+                        `).join('') : '<p>لا توجد استراتيجيات</p>'}
+                </div>
+                
+                <h3>المخاطر</h3>
+                <div class="risks-list">
+                    ${data.risks && data.risks.length > 0 ? 
+                        data.risks.map(r => `
+                            <div class="risk-item risk-level-${r.risk_level}">
+                                <h4>${r.risk_name}</h4>
+                                <p>الفئة: ${r.risk_category === 'financial' ? 'مالية' : r.risk_category === 'operational' ? 'تشغيلية' : r.risk_category === 'strategic' ? 'استراتيجية' : r.risk_category === 'compliance' ? 'امتثال' : 'سمعة'}</p>
+                                <p>المستوى: ${r.risk_level === 'critical' ? 'حرج' : r.risk_level === 'high' ? 'عالي' : r.risk_level === 'medium' ? 'متوسط' : 'منخفض'}</p>
+                                <p>الاحتمالية: ${(r.probability * 100).toFixed(0)}% | التأثير: ${(r.impact * 100).toFixed(0)}%</p>
+                                <p>${r.mitigation_plan || ''}</p>
+                            </div>
+                        `).join('') : '<p>لا توجد مخاطر</p>'}
+                </div>
+                
+                <h3>التحليلات المالية الأخيرة</h3>
+                <div class="financial-analyses">
+                    ${data.financial_analyses && data.financial_analyses.length > 0 ? 
+                        data.financial_analyses.slice(0, 5).map(f => `
+                            <div class="financial-item">
+                                <p><strong>التاريخ:</strong> ${f.analysis_date}</p>
+                                <p>نسبة الربحية: ${f.profit_margin}% | نسبة الدين: ${(f.debt_ratio * 100).toFixed(0)}%</p>
+                                <p>التقييم: ${f.risk_assessment}</p>
+                            </div>
+                        `).join('') : '<p>لا توجد تحليلات مالية</p>'}
+                </div>
+            `;
+            
+            modal.style.display = 'block';
+        })
+        .catch(error => {
+            console.error('خطأ:', error);
+            alert('حدث خطأ في تحميل بيانات الشركة');
+        });
+}
+</script>
+{% endblock %}
+

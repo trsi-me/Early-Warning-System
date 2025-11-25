@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}نظام الإنذار المبكر{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% if session.user_id %}
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-logo">نظام الإنذار المبكر</h1>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('dashboard') }}">لوحة التحكم</a></li>
+                <li><a href="{{ url_for('companies') }}">الشركات</a></li>
+                <li><a href="{{ url_for('indicators') }}">المؤشرات</a></li>
+                <li><a href="{{ url_for('risk_management') }}">إدارة المخاطر</a></li>
+                <li><a href="{{ url_for('alerts') }}">التنبيهات</a></li>
+                <li><a href="{{ url_for('reports') }}">التقارير</a></li>
+                <li><a href="{{ url_for('about') }}">حول المشروع</a></li>
+                <li><a href="{{ url_for('policies') }}">السياسات</a></li>
+                <li class="notification-badge" id="notification-icon" onclick="toggleNotifications()">
+                    <a href="#">🔔</a>
+                </li>
+                <li><a href="{{ url_for('logout') }}">تسجيل الخروج</a></li>
+            </ul>
+        </div>
+    </nav>
+    <div class="notifications-panel" id="notifications-panel">
+        <div class="notifications-header">
+            <h3>الإشعارات</h3>
+            <span onclick="toggleNotifications()" style="cursor: pointer; color: #a0a0a0;">✕</span>
+        </div>
+        <div id="notifications-list"></div>
+    </div>
+    {% endif %}
+    
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% if session.user_id %}
+    <script>
+    function toggleNotifications() {
+        const panel = document.getElementById('notifications-panel');
+        panel.classList.toggle('active');
+        if (panel.classList.contains('active')) {
+            loadNotifications();
+        }
+    }
+    
+    function loadNotifications() {
+        fetch('/api/notifications?unread_only=true')
+            .then(response => response.json())
+            .then(data => {
+                const list = document.getElementById('notifications-list');
+                const icon = document.getElementById('notification-icon');
+                
+                if (data.length === 0) {
+                    list.innerHTML = '<div style="padding: 1rem; text-align: center; color: #a0a0a0;">لا توجد إشعارات جديدة</div>';
+                    icon.removeAttribute('data-count');
+                } else {
+                    icon.setAttribute('data-count', data.length);
+                    list.innerHTML = data.map(notif => {
+                        const typeClass = `notification-type-${notif.notification_type}`;
+                        return `
+                            <div class="notification-item unread ${typeClass}" onclick="markAsRead(${notif.id})">
+                                <h4>${notif.title}</h4>
+                                <p>${notif.message}</p>
+                                <div class="notification-time">${new Date(notif.created_at).toLocaleString('ar-SA')}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            })
+            .catch(error => console.error('خطأ في تحميل الإشعارات:', error));
+    }
+    
+    function markAsRead(notificationId) {
+        fetch(`/api/notifications/${notificationId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({is_read: 1})
+        })
+        .then(() => {
+            loadNotifications();
+            if (document.getElementById('notifications-list').children.length === 0) {
+                document.getElementById('notification-icon').removeAttribute('data-count');
+            }
+        });
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        loadNotifications();
+        setInterval(loadNotifications, 30000);
+    });
+    </script>
+    {% endif %}
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
+

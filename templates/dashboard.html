@@ -1,0 +1,205 @@
+{% extends "layout.html" %}
+
+{% block title %}لوحة التحكم - نظام الإنذار المبكر{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>لوحة التحكم</h1>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>تنبيهات عالية</h3>
+            <div class="stat-value" id="high-alerts">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>تنبيهات متوسطة</h3>
+            <div class="stat-value" id="medium-alerts">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>تنبيهات منخفضة</h3>
+            <div class="stat-value" id="low-alerts">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>إجمالي التنبيهات</h3>
+            <div class="stat-value" id="total-alerts">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>الشركات</h3>
+            <div class="stat-value" id="total-companies">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>مخاطر نشطة</h3>
+            <div class="stat-value" id="active-risks">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>مخاطر عالية</h3>
+            <div class="stat-value high" id="high-risks">0</div>
+        </div>
+        <div class="stat-card">
+            <h3>متوسط الربحية</h3>
+            <div class="stat-value" id="avg-profit">0%</div>
+        </div>
+    </div>
+    
+    <div class="dashboard-grid">
+        <div class="dashboard-section">
+            <h2>آخر المؤشرات</h2>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>العنوان</th>
+                            <th>المصدر</th>
+                            <th>النوع</th>
+                            <th>القيمة</th>
+                            <th>التاريخ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-indicators">
+                        <tr><td colspan="5">جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="dashboard-section">
+            <h2>التنبيهات الأخيرة</h2>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>المستوى</th>
+                            <th>الرسالة</th>
+                            <th>الحالة</th>
+                            <th>التاريخ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-alerts">
+                        <tr><td colspan="4">جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="dashboard-section">
+        <h2>توزيع التنبيهات</h2>
+        <canvas id="alerts-chart"></canvas>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    setInterval(loadDashboardData, 30000);
+});
+
+function loadDashboardData() {
+    Promise.all([
+        fetch('/api/dashboard/stats').then(r => r.json()),
+        fetch('/api/dashboard/comprehensive').then(r => r.json())
+    ])
+    .then(([statsData, comprehensiveData]) => {
+        updateStats(statsData.alerts_by_level);
+        updateComprehensiveStats(comprehensiveData);
+        updateRecentIndicators(statsData.recent_indicators);
+        updateRecentAlerts(statsData.recent_alerts);
+        updateChart(statsData.alerts_by_level);
+    })
+    .catch(error => {
+        console.error('خطأ في تحميل البيانات:', error);
+        document.getElementById('recent-indicators').innerHTML = '<tr><td colspan="5">حدث خطأ في تحميل البيانات</td></tr>';
+        document.getElementById('recent-alerts').innerHTML = '<tr><td colspan="4">حدث خطأ في تحميل البيانات</td></tr>';
+    });
+}
+
+function updateComprehensiveStats(data) {
+    document.getElementById('total-companies').textContent = data.total_companies || 0;
+    document.getElementById('active-risks').textContent = data.active_risks || 0;
+    document.getElementById('high-risks').textContent = data.high_risks || 0;
+    document.getElementById('avg-profit').textContent = (data.avg_profit_margin || 0).toFixed(1) + '%';
+}
+
+function updateStats(alertsByLevel) {
+    document.getElementById('high-alerts').textContent = alertsByLevel.high || 0;
+    document.getElementById('medium-alerts').textContent = alertsByLevel.medium || 0;
+    document.getElementById('low-alerts').textContent = alertsByLevel.low || 0;
+    const total = (alertsByLevel.high || 0) + (alertsByLevel.medium || 0) + (alertsByLevel.low || 0);
+    document.getElementById('total-alerts').textContent = total;
+}
+
+function updateRecentIndicators(indicators) {
+    const tbody = document.getElementById('recent-indicators');
+    if (indicators.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">لا توجد مؤشرات</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = indicators.map(ind => {
+        const value = ind.indicator_type === 'numeric' ? ind.numeric_value : ind.text_value;
+        return `
+            <tr>
+                <td>${ind.title}</td>
+                <td>${ind.source}</td>
+                <td>${ind.indicator_type === 'numeric' ? 'رقمي' : 'نصي'}</td>
+                <td>${value || '-'}</td>
+                <td>${ind.date}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateRecentAlerts(alerts) {
+    const tbody = document.getElementById('recent-alerts');
+    if (alerts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4">لا توجد تنبيهات</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = alerts.map(alert => {
+        const levelClass = `alert-level-${alert.level}`;
+        const statusClass = `alert-status-${alert.status}`;
+        return `
+            <tr>
+                <td><span class="${levelClass}">${alert.level === 'high' ? 'عالي' : alert.level === 'medium' ? 'متوسط' : 'منخفض'}</span></td>
+                <td>${alert.message}</td>
+                <td><span class="${statusClass}">${alert.status === 'new' ? 'جديد' : alert.status === 'acknowledged' ? 'معترف به' : 'محلول'}</span></td>
+                <td>${new Date(alert.created_at).toLocaleString('ar-SA')}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+let chartInstance = null;
+function updateChart(alertsByLevel) {
+    const ctx = document.getElementById('alerts-chart');
+    if (chartInstance) {
+        chartInstance.destroy();
+    }
+    
+    chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['عالي', 'متوسط', 'منخفض'],
+            datasets: [{
+                data: [
+                    alertsByLevel.high || 0,
+                    alertsByLevel.medium || 0,
+                    alertsByLevel.low || 0
+                ],
+                backgroundColor: ['#ff4444', '#ffaa00', '#44ff44']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true
+        }
+    });
+}
+</script>
+{% endblock %}
+

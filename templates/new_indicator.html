@@ -1,0 +1,137 @@
+{% extends "layout.html" %}
+
+{% block title %}إضافة مؤشر جديد - نظام الإنذار المبكر{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>إضافة مؤشر جديد</h1>
+    
+    <form id="indicator-form" class="form-container">
+        <div class="form-group">
+            <label for="title">العنوان *</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="description">الوصف</label>
+            <textarea id="description" name="description" rows="3"></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="source">المصدر *</label>
+            <input type="text" id="source" name="source" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="indicator_type">نوع المؤشر *</label>
+            <select id="indicator_type" name="indicator_type" required>
+                <option value="">اختر النوع</option>
+                <option value="text">نصي</option>
+                <option value="numeric">رقمي</option>
+            </select>
+        </div>
+        
+        <div class="form-group" id="text-value-group" style="display: none;">
+            <label for="text_value">القيمة النصية</label>
+            <input type="text" id="text_value" name="text_value">
+        </div>
+        
+        <div class="form-group" id="numeric-value-group" style="display: none;">
+            <label for="numeric_value">القيمة الرقمية</label>
+            <input type="number" step="any" id="numeric_value" name="numeric_value">
+        </div>
+        
+        <div class="form-group">
+            <label for="date">التاريخ *</label>
+            <input type="date" id="date" name="date" required>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">حفظ</button>
+            <a href="{{ url_for('indicators') }}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+    
+    <div id="message" class="message" style="display: none;"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const indicatorType = document.getElementById('indicator_type');
+    const textValueGroup = document.getElementById('text-value-group');
+    const numericValueGroup = document.getElementById('numeric-value-group');
+    
+    indicatorType.addEventListener('change', function() {
+        if (this.value === 'text') {
+            textValueGroup.style.display = 'block';
+            numericValueGroup.style.display = 'none';
+            document.getElementById('numeric_value').value = '';
+        } else if (this.value === 'numeric') {
+            textValueGroup.style.display = 'none';
+            numericValueGroup.style.display = 'block';
+            document.getElementById('text_value').value = '';
+        } else {
+            textValueGroup.style.display = 'none';
+            numericValueGroup.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('indicator-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            title: document.getElementById('title').value,
+            description: document.getElementById('description').value,
+            source: document.getElementById('source').value,
+            indicator_type: document.getElementById('indicator_type').value,
+            date: document.getElementById('date').value
+        };
+        
+        if (formData.indicator_type === 'text') {
+            formData.text_value = document.getElementById('text_value').value;
+            formData.numeric_value = null;
+        } else if (formData.indicator_type === 'numeric') {
+            formData.numeric_value = parseFloat(document.getElementById('numeric_value').value) || null;
+            formData.text_value = null;
+        }
+        
+        fetch('/api/indicators', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            const messageDiv = document.getElementById('message');
+            if (data.success) {
+                messageDiv.className = 'message success-message';
+                messageDiv.textContent = 'تم إضافة المؤشر بنجاح';
+                messageDiv.style.display = 'block';
+                document.getElementById('indicator-form').reset();
+                textValueGroup.style.display = 'none';
+                numericValueGroup.style.display = 'none';
+                setTimeout(() => {
+                    window.location.href = '/indicators';
+                }, 1500);
+            } else {
+                messageDiv.className = 'message error-message';
+                messageDiv.textContent = data.error || 'حدث خطأ أثناء إضافة المؤشر';
+                messageDiv.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('خطأ:', error);
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = 'message error-message';
+            messageDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
+            messageDiv.style.display = 'block';
+        });
+    });
+    
+    document.getElementById('date').valueAsDate = new Date();
+});
+</script>
+{% endblock %}
+

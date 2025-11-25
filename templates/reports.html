@@ -1,0 +1,168 @@
+{% extends "layout.html" %}
+
+{% block title %}التقارير - نظام الإنذار المبكر{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>إصدار التقارير</h1>
+    
+    <div class="report-generator">
+        <h2>إنشاء تقرير جديد</h2>
+        <form id="report-form" class="form-container">
+            <div class="form-group">
+                <label for="report-type">نوع التقرير *</label>
+                <select id="report-type" name="report_type" required>
+                    <option value="">اختر النوع</option>
+                    <option value="comprehensive">شامل</option>
+                    <option value="risk">مخاطر</option>
+                    <option value="financial">مالي</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="report-format">صيغة التقرير *</label>
+                <select id="report-format" name="format" required>
+                    <option value="">اختر الصيغة</option>
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                    <option value="txt">TXT</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="report-company">الشركة (اختياري)</label>
+                <select id="report-company" name="company_id">
+                    <option value="">الكل</option>
+                </select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">إنشاء التقرير</button>
+            </div>
+        </form>
+        
+        <div id="report-message" class="message" style="display: none;"></div>
+    </div>
+    
+    <div class="reports-history">
+        <h2>التقارير السابقة</h2>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>اسم التقرير</th>
+                        <th>النوع</th>
+                        <th>الصيغة</th>
+                        <th>المنشئ</th>
+                        <th>التاريخ</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="reports-table">
+                    <tr><td colspan="6">جاري التحميل...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadCompanies();
+    loadReports();
+    
+    document.getElementById('report-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            report_type: document.getElementById('report-type').value,
+            format: document.getElementById('report-format').value,
+            company_id: document.getElementById('report-company').value || null
+        };
+        
+        fetch('/api/reports/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            const messageDiv = document.getElementById('report-message');
+            if (data.success) {
+                messageDiv.className = 'message success-message';
+                messageDiv.textContent = `تم إنشاء التقرير بنجاح: ${data.report_name}`;
+                messageDiv.style.display = 'block';
+                document.getElementById('report-form').reset();
+                loadReports();
+            } else {
+                messageDiv.className = 'message error-message';
+                messageDiv.textContent = data.error || 'حدث خطأ أثناء إنشاء التقرير';
+                messageDiv.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('خطأ:', error);
+            const messageDiv = document.getElementById('report-message');
+            messageDiv.className = 'message error-message';
+            messageDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
+            messageDiv.style.display = 'block';
+        });
+    });
+});
+
+function loadCompanies() {
+    fetch('/api/companies')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('report-company');
+            data.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = company.name;
+                select.appendChild(option);
+            });
+        });
+}
+
+function loadReports() {
+    fetch('/api/reports')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('reports-table');
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6">لا توجد تقارير</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.map(report => {
+                const typeText = {
+                    'comprehensive': 'شامل',
+                    'risk': 'مخاطر',
+                    'financial': 'مالي',
+                    'compliance': 'امتثال'
+                }[report.report_type] || report.report_type;
+                
+                return `
+                    <tr>
+                        <td>${report.report_name}</td>
+                        <td>${typeText}</td>
+                        <td>${report.format.toUpperCase()}</td>
+                        <td>${report.generated_by_name || '-'}</td>
+                        <td>${new Date(report.created_at).toLocaleString('ar-SA')}</td>
+                        <td>
+                            ${report.file_path ? `<a href="/data/reports/${report.report_name}.${report.format}" download class="btn btn-sm btn-primary">تحميل</a>` : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('خطأ:', error);
+            document.getElementById('reports-table').innerHTML = '<tr><td colspan="6">حدث خطأ في تحميل البيانات</td></tr>';
+        });
+}
+</script>
+{% endblock %}
+
