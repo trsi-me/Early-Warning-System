@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS reports (
 ''')
 
 # إدخال المستخدم الإداري الافتراضي
-admin_password_hash = generate_password_hash('admin123')
+admin_password_hash = generate_password_hash('')
 cursor.execute('''
 INSERT OR IGNORE INTO users (username, password_hash) 
 VALUES (?, ?)
@@ -409,5 +409,5 @@ print(f'- {len(risks_data)} مخاطرة')
 print(f'- {len(financial_analyses_data)} تحليل مالي')
 print(f'- {len(indicators_data)} مؤشر')
 print(f'- {len(alerts_data)} تنبيه')
-print('المستخدم الافتراضي: admin / admin123')
+print('المستخدم الافتراضي: admin / ')
 
